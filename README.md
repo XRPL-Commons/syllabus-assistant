@@ -21,18 +21,24 @@ XRP Ledger and hands them a ready-to-edit syllabus.
 
 ## Setup
 
+Data is stored in **MongoDB** (Mongoose models in `server/models/` —
+submissions, admin lock state, and the seeded activity catalogue).
+
 ```bash
+cp .env.example .env     # then set MONGODB_URI (and ADMIN_PASSWORD)
 npm install
-npm run dev          # http://localhost:3000
+npm run dev              # http://localhost:3000
 ```
 
-Set the admin password in a `.env` file (default: `changeme`):
+`.env`:
 
 ```bash
-ADMIN_PASSWORD=your-secret
+MONGODB_URI=mongodb://127.0.0.1:27017/syllabus-assistant   # required
+ADMIN_PASSWORD=changeme                                    # /admin gate
 ```
 
-Then open `/admin` and enter the password.
+The app connects to MongoDB on startup and seeds the activity catalogue on first
+run. Open `/admin` and enter the password to view submissions.
 
 > After 3 failed admin attempts the dashboard locks itself. To unlock, delete
 > `.data/admin.json`.

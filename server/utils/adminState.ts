@@ -1,36 +1,26 @@
-import { promises as fs } from 'node:fs'
-import { join } from 'node:path'
+import { AdminState } from '../models/adminState.model'
 
 /**
- * Persistent admin auth state (the "database" boolean lock).
- *
- * Failed password attempts are counted globally (regardless of IP). After
- * MAX_ATTEMPTS failures, `locked` flips to true and stays true — the admin
- * endpoint then refuses everyone, including the correct password, until a human
- * resets it in the db: delete `.data/admin.json`, or set `locked: false` and
- * `failedAttempts: 0`.
+ * Mongo-backed admin lock state (auto-imported by the API routes).
+ * Failed attempts are counted globally; after MAX_ATTEMPTS the `locked` flag is
+ * set and stays set until a human resets it in the db.
  */
 
 export const MAX_ATTEMPTS = 3
 
-export interface AdminState {
-  failedAttempts: number
-  locked: boolean
+export async function readAdminState() {
+  const s = await AdminState.findOneAndUpdate(
+    { key: 'admin' },
+    { $setOnInsert: { failedAttempts: 0, locked: false } },
+    { upsert: true, new: true }
+  )
+  return { failedAttempts: s.failedAttempts, locked: s.locked }
 }
 
-const DIR = join(process.cwd(), '.data')
-const FILE = join(DIR, 'admin.json')
-
-export async function readAdminState(): Promise<AdminState> {
-  try {
-    const s = JSON.parse(await fs.readFile(FILE, 'utf-8'))
-    return { failedAttempts: Number(s.failedAttempts) || 0, locked: Boolean(s.locked) }
-  } catch {
-    return { failedAttempts: 0, locked: false }
-  }
-}
-
-export async function writeAdminState(state: AdminState): Promise<void> {
-  await fs.mkdir(DIR, { recursive: true })
-  await fs.writeFile(FILE, JSON.stringify(state, null, 2), 'utf-8')
+export async function writeAdminState(state: { failedAttempts: number; locked: boolean }) {
+  await AdminState.updateOne(
+    { key: 'admin' },
+    { $set: { failedAttempts: state.failedAttempts, locked: state.locked } },
+    { upsert: true }
+  )
 }

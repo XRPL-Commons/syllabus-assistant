@@ -10,7 +10,7 @@
           <h1 class="text-lg font-semibold text-gray-900 dark:text-white">Admin access</h1>
           <p class="text-sm text-gray-500 dark:text-gray-400">Enter the password to view submissions.</p>
         </div>
-        <form @submit.prevent="unlock">
+        <form @submit.prevent="unlock()">
           <UInput v-model="password" type="password" placeholder="Password" autofocus class="w-full" :disabled="loading" />
           <p v-if="error" class="mt-2 text-sm text-red-500">{{ error }}</p>
           <UButton type="submit" block class="mt-4" :loading="loading">Unlock</UButton>
@@ -219,15 +219,21 @@ const selected = ref<any | null>(null)
 const fetchSubmissions = () =>
   $fetch<any[]>('/api/admin/submissions', { method: 'POST', body: { password: password.value } })
 
-const unlock = async () => {
+const unlock = async (opts: { silent?: boolean } = {}) => {
   loading.value = true
   error.value = ''
   try {
+    // An empty list still unlocks — the dashboard works with zero submissions.
     submissions.value = await fetchSubmissions()
     unlocked.value = true
     if (import.meta.client) sessionStorage.setItem('admin-pw', password.value)
   } catch (e: any) {
+    // Drop any stale stored password so we don't keep auto-failing (and burning
+    // lockout attempts) on every reload.
+    if (import.meta.client) sessionStorage.removeItem('admin-pw')
     const status = e?.statusCode ?? e?.response?.status ?? e?.data?.statusCode
+    // A failed silent auto-unlock (stale password) shouldn't nag — just show the gate.
+    if (opts.silent) { password.value = ''; return }
     if (status === 423) {
       error.value = 'Admin access has been locked after too many failed attempts. An administrator must unlock it.'
     } else if (status === 401) {
@@ -255,7 +261,7 @@ const lock = () => {
 
 onMounted(() => {
   const saved = import.meta.client ? sessionStorage.getItem('admin-pw') : null
-  if (saved) { password.value = saved; unlock() }
+  if (saved) { password.value = saved; unlock({ silent: true }) }
 })
 
 // ── Aggregations ──────────────────────────────────────────────

@@ -5,6 +5,8 @@ export default defineNuxtConfig({
   modules: ['@nuxt/ui'],
   css: ['~/assets/css/fonts.css', '~/assets/css/main.css'],
   runtimeConfig: {
+    // MongoDB connection string (required). Set MONGODB_URI in .env.
+    mongodbUri: process.env.MONGODB_URI,
     // Server-only. Override with ADMIN_PASSWORD. Gates the hidden /admin page.
     adminPassword: process.env.ADMIN_PASSWORD || 'changeme'
   },
