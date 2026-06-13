@@ -1,10 +1,14 @@
-import { defineNitroPlugin, useRuntimeConfig } from '#imports'
 import mongoose from 'mongoose'
 import { ActivityModule } from '../models/activityModule.model'
 
 /**
- * Connect to MongoDB on server startup (same pattern as oasis), then seed the
- * activity catalogue once if the collection is empty.
+ * Serverless-safe MongoDB connection.
+ *
+ * On Vercel each function freezes/thaws between invocations, so connecting once
+ * in a startup plugin is unreliable. Instead we cache the connection promise and
+ * `await connectMongo()` at the start of every DB operation — cheap once warm,
+ * and it re-establishes after a cold start. `bufferCommands:false` makes queries
+ * fail fast instead of hanging if the connection isn't ready.
  */
 
 const ACTIVITY_SEED = [
@@ -16,17 +20,29 @@ const ACTIVITY_SEED = [
   { name: 'Build a Payments App', description: 'Integrate XRPL payments into a small web app, including destination tags and reliable submission.', type: 'lesson', metadata: { estimatedTime: 60 }, authors: [{ username: 'devrel' }] }
 ]
 
-export default defineNitroPlugin(async () => {
-  const config = useRuntimeConfig()
-  const uri = config.mongodbUri
+let promise: Promise<typeof mongoose> | null = null
 
-  if (!uri) {
-    throw new Error('MONGODB_URI is not defined — set it in .env')
+export function connectMongo() {
+  if (mongoose.connection.readyState === 1) return Promise.resolve(mongoose)
+  if (!promise) {
+    const uri = useRuntimeConfig().mongodbUri as string
+    if (!uri) {
+      throw createError({ statusCode: 500, statusMessage: 'MONGODB_URI is not set (configure it in your environment).' })
+    }
+    mongoose.set('bufferCommands', false)
+    promise = mongoose
+      .connect(uri, { serverSelectionTimeoutMS: 8000 })
+      .then(async (m) => {
+        // Seed the activity catalogue once.
+        if ((await ActivityModule.estimatedDocumentCount()) === 0) {
+          await ActivityModule.insertMany(ACTIVITY_SEED)
+        }
+        return m
+      })
+      .catch((err) => {
+        promise = null // allow the next request to retry
+        throw err
+      })
   }
-
-  await mongoose.connect(uri as string)
-
-  if ((await ActivityModule.estimatedDocumentCount()) === 0) {
-    await ActivityModule.insertMany(ACTIVITY_SEED)
-  }
-})
+  return promise
+}

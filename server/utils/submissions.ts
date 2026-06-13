@@ -9,10 +9,12 @@ export interface SubmissionInput {
 }
 
 export async function readSubmissions() {
+  await connectMongo()
   const docs = await Submission.find().sort({ createdAt: -1 }).lean()
   return docs.map(d => ({ ...d, id: String(d._id) }))
 }
 
 export async function addSubmission(input: SubmissionInput) {
+  await connectMongo()
   return Submission.create(input)
 }

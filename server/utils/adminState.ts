@@ -9,6 +9,7 @@ import { AdminState } from '../models/adminState.model'
 export const MAX_ATTEMPTS = 3
 
 export async function readAdminState() {
+  await connectMongo()
   const s = await AdminState.findOneAndUpdate(
     { key: 'admin' },
     { $setOnInsert: { failedAttempts: 0, locked: false } },
@@ -18,6 +19,7 @@ export async function readAdminState() {
 }
 
 export async function writeAdminState(state: { failedAttempts: number; locked: boolean }) {
+  await connectMongo()
   await AdminState.updateOne(
     { key: 'admin' },
     { $set: { failedAttempts: state.failedAttempts, locked: state.locked } },
